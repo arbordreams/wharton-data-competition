@@ -1,0 +1,33 @@
+{
+  "timestamp_utc": "2026-02-08T09:47:00.503589+00:00",
+  "command": "/opt/homebrew/opt/python@3.13/bin/python3.13 PredictionModel_V3.py --seed 42 --season-file whl_2025.csv --round1-file Wharton Download/WHSDSC_2026_CompetitionPackage-20260208T051745Z-1-001/WHSDSC_2026_CompetitionPackage/WHSDSC_Rnd1_matchups.xlsx --output-dir outputs",
+  "cwd": "/Users/seb/wharton-data-competition",
+  "git_commit": "4db9a8d039512d56c6e7569072f64a40619e7e77",
+  "python_version": "3.13.5",
+  "platform": "macOS-26.2-arm64-arm-64bit-Mach-O",
+  "library_versions": {
+    "numpy": "2.3.2",
+    "pandas": "2.3.2",
+    "scikit_learn": "1.8.0"
+  },
+  "script_path": "/Users/seb/wharton-data-competition/PredictionModel_V3.py",
+  "script_sha256": "933c61075472ac7a245f9ce7bd265d3da467cd1f1b5b709dcaa69fb957ff1bfb",
+  "input_hashes": {
+    "whl_2025.csv": "1795edb3d0df7355da7744181cf0c2943f2125f94c85334804abd8318c4e1947",
+    "Wharton Download/WHSDSC_2026_CompetitionPackage-20260208T051745Z-1-001/WHSDSC_2026_CompetitionPackage/WHSDSC_Rnd1_matchups.xlsx": "fa776f8f5a9d8838b693e4f5103e71b446e36c04ccfd64a757806b425d76fa4c"
+  },
+  "output_hashes": {
+    "outputs/round1_home_win_probabilities.csv": "7a3eef69c9e6e4a6ab2d72d116a1ad7d46c38b931583c7c1e27c34da9d7860b9",
+    "outputs/team_power_rankings.csv": "eac3510b5c5e6b21bef068ff89c8dd86c8106714ddf511d70ad031bb529df5ac",
+    "outputs/model_cv_summary.csv": "abb7c92c2810148d670a5355675e2924fe2ea39cfc5dd16fa11e8326d015edea",
+    "outputs/holdout_metrics.csv": "d3f7fb47653a78794669b5e615f24086fe6c752e2085075e4b361d73ce7130f2",
+    "outputs/holdout_predictions.csv": "8cea9696a1f70e2ba801c0c659ceb4f98df11c2cd5fe6c1280fae723f8936038",
+    "outputs/model_blend_summary.csv": "0c360b0f73e9cec5b6743f11f76cac0028dc5928f403c8bead7bf7ecf373e457",
+    "outputs/feature_importance.csv": "da9c3492d9ca6bfb2c65174fd472346448cece3e28589757de5fb4d0024a297b",
+    "outputs/run_metadata.json": "c3aeabbf963fe17709fc701b9a55d5f97888d2f2358e2fbaaa3fc726c699db6b"
+  },
+  "reproducibility_notes": [
+    "Predictions are reproducible with the same seed, same input files, and same dependency versions.",
+    "run_metadata.json and run_manifest.json include timestamps and will change run-to-run."
+  ]
+}

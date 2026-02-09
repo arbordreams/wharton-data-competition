@@ -1,0 +1,17 @@
+component,weight,cv_log_loss,cv_brier,selected
+elo_only,0.6000000000000001,0.6819932358152424,0.2444155225895614,True
+elo_shrunk_home_rate,0.55,0.6850234069782531,0.245973324651035,True
+logistic_regression,0.0,0.6819932358152424,0.2444155225895614,False
+random_forest,0.4,0.6819932358152424,0.2444155225895614,True
+hist_gradient_boosting,0.0,0.6819932358152424,0.2444155225895614,False
+blend_uncalibrated,1.0,0.6819932358152424,0.2444155225895614,False
+blend_platt_calibrated,0.0,0.6842899213848016,0.24559071622184706,False
+blend_isotonic_calibrated,0.0,0.7392079949925922,0.24733769650010776,False
+stack_uncalibrated,1.0,0.6852126201269828,0.24605378737082623,False
+stack_platt_calibrated,0.0,0.6874491379678696,0.24715461882458706,False
+stack_isotonic_calibrated,0.0,0.7434753610520348,0.250719724815615,False
+recent_objective_elo_only_log_loss,,0.6740456116518627,,False
+recent_objective_elo_shrunk_log_loss,,0.6749485803957735,,True
+recent_objective_blend_log_loss,,0.676428385365308,,False
+recent_objective_stack_log_loss,,0.6795753733989464,,False
+recent_objective_selected_score,,0.6799859936870134,,True

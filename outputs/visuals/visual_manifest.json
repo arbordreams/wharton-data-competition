@@ -1,0 +1,17 @@
+{
+  "input_dir": "outputs",
+  "output_dir": "outputs/visuals",
+  "matplotlib_version": "3.10.5",
+  "visual_hashes": {
+    "blend_weights.png": "fdaf954fea7a75c9950cd9403c5d84bca08f5225271157d2756737d75f1ff1c2",
+    "cv_oof_model_comparison.png": "63f1ebcd352d11556755fe9507c3fc6afd5440366c59591c9a6aed99512c0f4c",
+    "feature_importance_logreg.png": "7eaeb39b77bf94294d79de6c7938b76c246b2475ba2fcdb81d61fa65db1a0754",
+    "feature_importance_rf.png": "716b906053e09bce3355ab247efd70a0316113e23fd36b6d4a6882232b13011f",
+    "holdout_confusion_matrix.png": "f7b9fc5ced8b91d6ce664e7bf1b525210c0a59fbb2a83042e0d72a9e1aebaa5e",
+    "holdout_model_comparison.png": "5d97d9465b44bde36d7d01014b06cde65ee98c455598f6cd9c8fa95e9123163e",
+    "holdout_reliability_plot.png": "1591428c1ba4984592104b45abe644bc1c74348784900c1e98b7cb5d78ab5ff5",
+    "holdout_selected_vs_baseline.png": "827f91f2835e8a7277b6d1cd28543f0fd8147bb4c5667b89afae760b328355b9",
+    "round1_home_win_probabilities.png": "2177be4d0a1a4b2c80c4894d49e55d14abae7d9ed6ebe8a00b927ec3e80c122c",
+    "top_power_rankings.png": "db5e813f1945a0f8253f899e5cbf40a11110b81062b328fc62bab0b2271f337c"
+  }
+}

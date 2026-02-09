@@ -1,0 +1,17 @@
+\begin{tabular}{lrrrr}
+\toprule
+model & accuracy & log\_loss & brier & auc \\
+\midrule
+elo only & 0.5568 & 0.6868 & 0.2469 & 0.5636 \\
+logistic regression & 0.5070 & 1.1259 & 0.3383 & 0.4953 \\
+random forest & 0.5632 & 0.6914 & 0.2487 & 0.5560 \\
+hist gradient boosting & 0.5308 & 0.9582 & 0.3182 & 0.5225 \\
+elo shrunk home rate & 0.5546 & 0.6850 & 0.2460 & 0.5639 \\
+blend uncalibrated & 0.5741 & 0.6820 & 0.2444 & 0.5642 \\
+blend platt calibrated & 0.5546 & 0.6843 & 0.2456 & 0.5545 \\
+blend isotonic calibrated & 0.5903 & 0.7392 & 0.2473 & 0.5504 \\
+stack uncalibrated & 0.5546 & 0.6852 & 0.2461 & 0.5335 \\
+stack platt calibrated & 0.5546 & 0.6874 & 0.2472 & 0.4939 \\
+stack isotonic calibrated & 0.5589 & 0.7435 & 0.2507 & 0.5077 \\
+\bottomrule
+\end{tabular}

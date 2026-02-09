@@ -1,0 +1,22 @@
+\begin{tabular}{lrrrl}
+\toprule
+component & weight & cv\_log\_loss & cv\_brier & selected \\
+\midrule
+elo only & 0.6000 & 0.6820 & 0.2444 & yes \\
+elo shrunk home rate & 0.5500 & 0.6850 & 0.2460 & yes \\
+logistic regression & 0.0000 & 0.6820 & 0.2444 & no \\
+random forest & 0.4000 & 0.6820 & 0.2444 & yes \\
+hist gradient boosting & 0.0000 & 0.6820 & 0.2444 & no \\
+blend uncalibrated & 1.0000 & 0.6820 & 0.2444 & no \\
+blend platt calibrated & 0.0000 & 0.6843 & 0.2456 & no \\
+blend isotonic calibrated & 0.0000 & 0.7392 & 0.2473 & no \\
+stack uncalibrated & 1.0000 & 0.6852 & 0.2461 & no \\
+stack platt calibrated & 0.0000 & 0.6874 & 0.2472 & no \\
+stack isotonic calibrated & 0.0000 & 0.7435 & 0.2507 & no \\
+recent objective elo only log loss &  & 0.6740 &  & no \\
+recent objective elo shrunk log loss &  & 0.6749 &  & yes \\
+recent objective blend log loss &  & 0.6764 &  & no \\
+recent objective stack log loss &  & 0.6796 &  & no \\
+recent objective selected score &  & 0.6800 &  & yes \\
+\bottomrule
+\end{tabular}

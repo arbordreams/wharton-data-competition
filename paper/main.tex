@@ -1,0 +1,390 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{float}
+\usepackage{placeins}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{siunitx}
+\usepackage{microtype}
+\usepackage[numbers]{natbib}
+\usepackage[hidelinks]{hyperref}
+\usepackage{setspace}
+
+\onehalfspacing
+\setlength{\parskip}{0.35em}
+\setlength{\parindent}{0em}
+
+\title{Leak-Safe Probabilistic Forecasting for the 2026 Wharton Hockey Competition}
+\author{
+  Sebastien Kawada, Dylan Holyoak, and Aidan Gildea\\
+  Epoch Learn\\
+  Los Angeles, USA
+}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present a leak-safe, decision-theoretic forecasting system for the 2026 Wharton Data Science Competition hockey task.
+The competition objective is pregame home-win probability estimation for 16 Round 1 matchups, where quality is judged by probabilistic scoring rather than postgame classification.
+Using 1,312 historical games across 32 teams, we generate every feature vector from pregame state only, tune models with rolling cross-validation, and evaluate exactly once on an untouched temporal holdout.
+The final stack combines Elo-style paired-comparison structure \cite{elo1978,bradley1952rank,glickman1999parameter}, supervised matchup learners \cite{cox1958regression,breiman2001,friedman2001greedy}, and calibration-aware selection \cite{platt1999,zadrozny2002transforming,niculescu2005predicting}.
+On untouched holdout data, the deployed source (Elo-shrunk recent-objective selector) attains log loss 0.6720 versus 0.6759 for a home-rate baseline (delta -0.00387, -0.57\% relative), while also improving Brier score.
+To characterize deployment risk, we report IID and moving-block bootstrap projections \cite{efron1979bootstrap,kunsch1989jackknife} and estimate a 70.7\%--74.5\% probability of beating baseline log loss on future samples.
+\end{abstract}
+
+\section{Introduction}
+Sports prediction systems can look strong while relying on information that is unavailable at real prediction time.
+This failure mode is common in competition settings where game summaries contain highly outcome-linked variables.
+For the Wharton hockey task, the core challenge is to estimate pregame win probabilities, not to classify finished games from postgame box scores.
+Because the output is probabilistic, model quality must be evaluated with proper scoring rules, not only thresholded classification accuracy \cite{brier1950,gneiting2007}.
+Conceptually, the task is a dynamic paired-comparison problem \cite{bradley1952rank,glickman1999parameter} under temporal non-stationarity, where operational validity depends on strict chronology and calibration quality \cite{niculescu2005predicting}.
+
+From a decision perspective, this is risk minimization under a proper score:
+\[
+\mathcal{R}(f)=\mathbb{E}\left[-Y\log f(X)-(1-Y)\log(1-f(X))\right],
+\]
+where \(f(X)\in(0,1)\) is the forecasted home-win probability.
+Minimizing \(\mathcal{R}\) aligns model training and selection with the competition metric and penalizes overconfident mistakes superlinearly \cite{gneiting2007}.
+
+This work makes four contributions:
+\begin{samepage}
+\begin{enumerate}
+    \item A chronology-safe state-space feature engine where every game row is generated from pregame information only.
+    \item A probabilistic model family spanning Elo, logistic regression \cite{cox1958regression}, random forests \cite{breiman2001}, and gradient boosting \cite{friedman2001greedy}.
+    \item A recency-aware selection rule that balances global CV quality with late-fold robustness, then selects a deployable probability source.
+    \item A reproducible research artifact set: deterministic runner, hash-based manifests, publication figures, and tables.
+\end{enumerate}
+\end{samepage}
+
+\section{Task and Data}
+The historical season dataset contains 1,312 games across 32 teams.
+Each game is represented by multiple line-level records, which we aggregate to one game-level row before constructing pregame features.
+Round 1 prediction requires 16 home-away matchups with no realized in-game statistics available at scoring time.
+Formally, with chronological index \(t\in\{1,\dots,T\}\), each game contributes tuple
+\[
+g_t=(h_t,a_t,y_t,r_t),
+\]
+where \(h_t\) and \(a_t\) are teams, \(y_t\in\{0,1\}\) is the home-win indicator, and \(r_t\) is the postgame statistics bundle (goals, xG, shots, assists, penalties, and derivatives) used only to update future state.
+
+\begin{table}[!htbp]
+\centering
+\caption{Experiment Summary and Key Counts}
+\input{tables/table_experiment_summary.tex}
+\label{tab:summary}
+\end{table}
+
+\section{Methodology}
+\subsection{Leak-Safe Feature Construction}
+Index games chronologically by \(t=1,\dots,T\), with home team \(h_t\), away team \(a_t\), and binary outcome \(y_t\in\{0,1\}\) (home win indicator).
+Let \(s_t\) denote the full league state immediately before game \(t\).
+Our feature map and state update are
+\[
+x_t=\phi(s_t,h_t,a_t),\qquad
+p_t=f_\theta(x_t),\qquad
+s_{t+1}=U(s_t,h_t,a_t,y_t,r_t),
+\]
+where \(r_t\) are game-realized statistics observed only after completion.
+By construction, \(x_t\) is conditionally independent of \(y_t\) given \((s_t,h_t,a_t)\), which enforces temporal admissibility and blocks target leakage.
+Equivalently, with information set \(\mathcal{F}_{t^-}\) immediately before game \(t\), we require \(x_t\in\mathcal{F}_{t^-}\) and \(y_t\notin\mathcal{F}_{t^-}\).
+This filtration view makes leakage checks auditable: any feature not measurable in \(\mathcal{F}_{t^-}\) is invalid by definition.
+
+Elo probabilities follow:
+\[
+p_{\text{home}}=\frac{1}{1+10^{-\frac{(R_{\text{home}}+H-R_{\text{away}})}{400}}}, \quad
+R'_{\text{home}} = R_{\text{home}} + K(y_{\text{home}}-p_{\text{home}})
+\]
+where \(K\) is the update factor, \(H\) is home-advantage points, and \(y_{\text{home}} \in \{0,1\}\).
+To improve early-season stability, we use an Elo-shrunk source:
+\[
+p_t^{\text{shrunk}}=\alpha\,p_t^{\text{elo}} + (1-\alpha)\,\pi_{\text{home}},
+\]
+where \(\pi_{\text{home}}\) is the development home-win prior and \(\alpha\in[0,1]\) is selected by CV.
+
+\subsection{Model Stack}
+For probabilistic selection we optimize strictly proper scores \cite{brier1950,gneiting2007}:
+\[
+\mathcal{L}_{\log} = -\frac{1}{N}\sum_{i=1}^{N}\left[y_i\log p_i + (1-y_i)\log(1-p_i)\right],\qquad
+\mathcal{L}_{\text{Brier}} = \frac{1}{N}\sum_{i=1}^{N}(p_i-y_i)^2.
+\]
+
+We evaluate:
+\begin{itemize}
+    \item Elo-only probability baseline \cite{elo1978},
+    \item Elo-shrunk probability source (Elo mixed with training home-rate prior),
+    \item logistic regression on engineered matchup features \cite{cox1958regression},
+    \item regularized random forest \cite{breiman2001},
+    \item histogram gradient boosting \cite{friedman2001greedy},
+    \item weighted convex blend,
+    \item stacked logistic meta-model over component probabilities.
+\end{itemize}
+For blend candidates:
+\[
+p_t^{\text{blend}}=\sum_{j=1}^{J}w_j p_{t,j},\qquad
+w_j\ge 0,\ \sum_j w_j=1.
+\]
+For stacked candidates:
+\[
+p_t^{\text{stack}}=\sigma(\beta_0+\beta^\top z_t),\quad
+z_t=[p_t^{\text{elo}},p_t^{\text{elo-shrunk}},p_t^{\text{lr}},p_t^{\text{rf}},p_t^{\text{hgb}}],
+\]
+with optional post-hoc calibration \(p_t^{\text{cal}}=C(p_t)\) via Platt or isotonic mappings \cite{platt1999,zadrozny2002transforming,kull2017beta}.
+Calibrated forecasts are interpreted through the reliability identity
+\[
+\mathbb{E}[Y\mid P=p]=p,
+\]
+which operationally links forecast probabilities to observed frequencies \cite{niculescu2005predicting}.
+Calibration is retained only when it improves OOF log loss beyond a minimum threshold.
+
+\subsection{Recent-Fold Robustness Selector}
+Let \(\text{LL}_{m}^{\text{OOF}}\) and \(\text{LL}_{m}^{\text{recent}}\) be average and recency-weighted fold log losses for source \(m\).
+For the recent component over the last \(K\) folds:
+\[
+\text{LL}_{m}^{\text{recent}}=\sum_{k=1}^{K}\omega_k \text{LL}_{m,k},\qquad
+\omega_k=\frac{\rho^{K-k}}{\sum_{j=1}^{K}\rho^{K-j}},
+\]
+with \(\rho>1\) emphasizing the latest folds.
+We score each source by
+\[
+J_m=\lambda\,\text{LL}_{m}^{\text{recent}} + (1-\lambda)\,\text{LL}_{m}^{\text{OOF}},
+\]
+then select the minimum-\(J_m\) source subject to robustness guardrails.
+In practice, advanced blend/stack sources are accepted only if they beat Elo-family sources on both OOF and recent-fold criteria by explicit margins.
+This design intentionally trades some average-CV optimality for reduced late-season fragility.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/fig_pipeline_overview.png}
+\caption{Pipeline overview: chronology-safe feature generation, CV tuning, untouched holdout evaluation, and Round 1 scoring.}
+\label{fig:pipeline}
+\end{figure}
+
+\section{Experimental Setup}
+We use a strict temporal split:
+first 85\% of games for model development and tuning, last 15\% as untouched holdout.
+Primary metric is log loss, with Brier score as secondary probability metric.
+Accuracy and AUC are reported for completeness.
+All hyperparameter and source-selection decisions are made on development folds only.
+Rolling time-series CV is used (rather than IID shuffling) to respect ordering assumptions and avoid optimistic leakage through temporal dependence \cite{bergmeir2018note}.
+Model-family diversity is intentional: generalized linear, tree-bagged, and boosting learners have different bias-variance-calibration failure modes, and we preserve this diversity before final source selection \cite{breiman2001,friedman2001greedy,niculescu2005predicting}.
+\FloatBarrier
+
+\section{Results}
+\subsection{Out-of-Fold Development Performance}
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/fig_cv_oof_model_comparison.png}
+\caption{Cross-validated OOF model comparison on development data.}
+\label{fig:oof_compare}
+\end{figure}
+
+\begin{table}[!htbp]
+\centering
+\caption{OOF Development Metrics}
+\input{tables/table_oof_metrics.tex}
+\label{tab:oof}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.60\textwidth]{figures/fig_blend_weights.png}
+\caption{Selected blend allocation across component models.}
+\label{fig:blendweights}
+\end{figure}
+
+\begin{table}[!htbp]
+\centering
+\caption{Blend Components and Selection Metadata}
+\input{tables/table_blend_components.tex}
+\label{tab:blend}
+\end{table}
+
+The uncalibrated blend is best on average OOF log loss (Table~\ref{tab:oof}), but recent-fold diagnostics in Table~\ref{tab:blend} indicate better late-fold behavior from Elo.
+This OOF-vs-recent divergence is central: complex sources can improve aggregate CV while still degrading the most recent folds that best proxy deployment conditions.
+Quantitatively, the best OOF blend reaches 0.6820 log loss, while the recency objective favors Elo-shrunk at 0.6749 recent-fold log loss.
+This is a concrete example of temporal risk asymmetry: minimizing average retrospective error is not equivalent to minimizing near-future deployment error.
+\FloatBarrier
+
+\subsection{Untouched Holdout Performance}
+\begin{table}[!htbp]
+\centering
+\caption{Untouched Holdout Metrics}
+\input{tables/table_holdout_metrics.tex}
+\label{tab:holdout}
+\end{table}
+
+The selected production strategy is reported in Table~\ref{tab:summary} and \texttt{run\_metadata.json}.
+For this run, the selected strategy improves holdout log loss and Brier score versus the home-rate baseline, with tied accuracy (both 0.6041).
+The key point is decision-theoretic: a model can tie 0/1 accuracy yet still produce materially better probabilities by reducing confidence error on the same outcomes \cite{gneiting2007}.
+Relative to baseline, the selected model reduces holdout log loss by 0.57\% and Brier by 0.79\%, while preserving AUC gains (0.5284 vs 0.5000).
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.72\textwidth]{figures/fig_holdout_selected_vs_baseline.png}
+\caption{Direct comparison of selected strategy and baseline on untouched holdout.}
+\label{fig:selected_vs_baseline}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\textwidth]{figures/fig_holdout_model_comparison.png}
+    \caption{Model comparison}
+\end{subfigure}
+\begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\textwidth]{figures/fig_holdout_reliability_plot.png}
+    \caption{Reliability}
+\end{subfigure}
+\caption{Holdout performance and calibration diagnostics.}
+\label{fig:holdout}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.55\textwidth]{figures/fig_holdout_confusion_matrix.png}
+\caption{Confusion matrix for the selected final model on untouched holdout.}
+\label{fig:cm}
+\end{figure}
+\FloatBarrier
+
+\subsection{Uncertainty and Error Analysis}
+\begin{table}[!htbp]
+\centering
+\caption{Holdout Uncertainty and Calibration Diagnostics}
+\input{tables/table_holdout_uncertainty.tex}
+\label{tab:uncertainty}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.78\textwidth]{figures/fig_holdout_probability_density.png}
+\caption{Distribution of final predicted probabilities by true holdout outcome.}
+\label{fig:prob_density}
+\end{figure}
+
+\begin{table}[!htbp]
+\centering
+\caption{High-Confidence Holdout Errors (Top 10)}
+\input{tables/table_high_confidence_errors.tex}
+\label{tab:hc_errors}
+\end{table}
+
+Bootstrap analysis (Table~\ref{tab:uncertainty}) shows mean delta log loss improvement for the selected model versus baseline, but with a confidence interval crossing zero.
+This indicates a favorable but statistically modest edge on one season of data.
+The high-confidence error table is empty for this run, indicating no extreme-confidence misses under the configured diagnostic threshold; this is directionally consistent with conservative probabilities concentrated near 0.60--0.66.
+Combined with the reliability plot, this suggests the remaining error mass is dominated by medium-confidence upset outcomes rather than catastrophic overconfidence.
+
+\subsection{Estimated Test-Set Performance}
+To translate holdout evidence into expected test behavior, we estimate the distribution of delta log loss (selected minus baseline) under two resampling regimes:
+IID bootstrap \cite{efron1979bootstrap} and moving-block bootstrap (block size 12) to partially account for temporal dependence \cite{kunsch1989jackknife}.
+Let \(\Delta^{*(b)}\) be bootstrap replicate \(b\) of delta log loss. We estimate
+\[
+\hat{p}_{\text{win}}=\frac{1}{B}\sum_{b=1}^{B}\mathbf{1}\{\Delta^{*(b)}<0\},
+\]
+the probability that selected beats baseline under the chosen resampling regime.
+
+\begin{table}[!htbp]
+\centering
+\caption{Projected Test-Set Performance from Holdout Resampling}
+\input{tables/table_expected_test_performance.tex}
+\label{tab:projected}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.82\textwidth]{figures/fig_delta_bootstrap_distribution.png}
+\caption{Estimated distribution of test delta log loss (selected minus baseline) from IID and block bootstrap. Values below zero indicate selected-model improvement.}
+\label{fig:delta_bootstrap}
+\end{figure}
+
+Table~\ref{tab:projected} provides point and interval projections.
+In this run, IID bootstrap estimates a 74.5\% probability that the selected model beats baseline log loss, while block bootstrap estimates 70.7\%.
+Under a baseline-stability assumption, the projected selected log loss has mean 0.6720 with an IID 95\% range of approximately [0.6604, 0.6838].
+Because both intervals include weak- or no-gain regions, we interpret expected out-of-sample advantage as plausible but modest rather than guaranteed.
+This is precisely the profile expected from a one-season setting: positive expected edge with non-trivial overlap between model and baseline risk distributions.
+\FloatBarrier
+
+\section{Interpretability and Ranking Outputs}
+\begin{figure}[!htbp]
+\centering
+\begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\textwidth]{figures/fig_feature_importance_logreg.png}
+    \caption{Logistic coefficient magnitudes}
+\end{subfigure}
+\begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\textwidth]{figures/fig_feature_importance_rf.png}
+    \caption{Random forest feature importances}
+\end{subfigure}
+\caption{Feature importance views across model families.}
+\label{fig:importance}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.70\textwidth]{figures/fig_top_power_rankings.png}
+\caption{Top teams by composite power score.}
+\label{fig:powervis}
+\end{figure}
+
+\begin{table}[!htbp]
+\centering
+\caption{Top 10 Team Power Rankings}
+\input{tables/table_top10_rankings.tex}
+\label{tab:rankings}
+\end{table}
+The ranking view is descriptive rather than causal: it summarizes posterior team strength under this model family and season, and should be interpreted jointly with uncertainty diagnostics rather than as a standalone estimator of latent quality.
+\FloatBarrier
+
+\section{Round 1 Forecasts}
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/fig_round1_probabilities.png}
+\caption{Predicted home-win probabilities for Round 1 matchups.}
+\label{fig:round1}
+\end{figure}
+
+\begin{table}[!htbp]
+\centering
+\caption{Top Round 1 Home Favorites}
+\input{tables/table_top_round1_probs.tex}
+\label{tab:round1table}
+\end{table}
+Round 1 probabilities are intentionally moderate (top forecasts around 0.66), reflecting the model's calibrated stance that even stronger teams retain substantial upset risk in this synthetic environment.
+\FloatBarrier
+
+\section{Reproducibility}
+Reproducibility is a first-class deliverable in this project.
+Each run emits:
+\begin{itemize}
+    \item \texttt{run\_metadata.json} for model configuration and selected strategy,
+    \item \texttt{run\_manifest.json} with command, environment versions, and SHA-256 hashes,
+    \item \texttt{visual\_manifest.json} with hashes for all figure files.
+\end{itemize}
+An automated runner (\texttt{run\_all.sh --verify-repro}) reruns the full pipeline and asserts hash equality for key artifacts.
+
+\section{Limitations}
+Several limitations remain.
+First, only one season is available, which limits the stability of broad model families.
+Second, the competition's synthetic environment may not capture all real hockey non-stationarities.
+Third, holdout gains are small in absolute terms and should be interpreted with uncertainty.
+Fourth, model calibration can drift under future distribution shift and should be rechecked if new seasons are introduced.
+Fifth, we do not run formal pairwise forecast-comparison tests; adding these would further strengthen statistical claims beyond bootstrap interval evidence.
+
+\section{Conclusion}
+We present a leak-safe forecasting pipeline aligned to the actual pregame prediction task.
+The final system balances interpretability, calibration discipline, and operational reproducibility.
+Most importantly, this work shows that temporal correctness, proper scoring, and uncertainty-aware reporting are prerequisites for credible sports analytics claims in competition settings.
+In this dataset, conservative probabilistic discipline outperforms higher-variance complexity, yielding a small but repeatable expected log-loss edge against baseline.
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}
